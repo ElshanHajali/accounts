@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    username: root
+    password:
+    url: jdbc:h2:mem:accounts-db
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    generate-ddl: true
+  h2:
+    console:
+      enabled: true
+
+server:
+  port: 9090
+
