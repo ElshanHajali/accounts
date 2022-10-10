@@ -1,18 +1,18 @@
 package az.company.accounts.service;
 
-import az.company.accounts.model.Accounts;
+import az.company.accounts.dao.entity.AccountsEntity;
+import az.company.accounts.model.request.AccountsRequest;
+import az.company.accounts.model.response.AccountsResponse;
 
 import java.util.List;
-import java.util.Map;
 
 public interface AccountsService {
 
-    Accounts save(Accounts accounts);
-    List<Accounts> getAccounts();
-    Accounts getAccountById(long id);
-    List<Accounts> getAccountByCustomerId(long customerId, String accountType);
-    Accounts update(long accountId, Accounts accounts);
-    Accounts deleteAccount(long id);
-
-    Accounts patchAccountSingleParameter(long id, Map<String, Object> accountTypeMap);
+    List<AccountsResponse> getAccounts();
+    AccountsResponse getAccountById(long id);
+    List<AccountsResponse> getAccountByCustomerId(long customerId, String accountType);
+    void save(AccountsRequest accountsEntity);
+    void update(long accountId, AccountsRequest request);
+    void deleteAccount(long id);
+    void updateBranchAddress(long id, String accountType);
 }

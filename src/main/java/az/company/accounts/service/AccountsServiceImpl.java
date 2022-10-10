@@ -1,86 +1,156 @@
 package az.company.accounts.service;
 
-import az.company.accounts.model.Accounts;
-import az.company.accounts.repository.AccountsRepository;
+import az.company.accounts.dao.entity.AccountsEntity;
+import az.company.accounts.dao.repository.AccountsRepository;
+import az.company.accounts.model.request.AccountsRequest;
+import az.company.accounts.model.response.AccountsResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.util.Strings;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class AccountsServiceImpl implements AccountsService {
     private final AccountsRepository accountsRepository;
 
-    public AccountsServiceImpl(AccountsRepository accountsRepository) {
-        this.accountsRepository = accountsRepository;
-    }
-
     @Override
-    public Accounts save(Accounts accounts) {
-        accounts.setCreatedAt(LocalDate.now());
-        return accountsRepository.save(accounts);
-    }
+    public List<AccountsResponse> getAccounts() {
+        var accounts = accountsRepository.findAll();
+        List<AccountsResponse> responses = new ArrayList<>();
 
-    @Override
-    public List<Accounts> getAccounts() {
-        return accountsRepository.findAll();
-    }
-
-    @Override
-    public Accounts getAccountById(long id) {
-        return accountsRepository
-                .findById(id)
-                .orElseThrow(RuntimeException::new);
-    }
-
-    @Override
-    public List<Accounts> getAccountByCustomerId(long customerId, String accountType) {
-        return accountsRepository
-                .findByCustomerIdAndAccountType(customerId, accountType);
-    }
-
-    @Override
-    public Accounts update(long accountId, Accounts accounts) {
-        Accounts accountFromDB = getAccountById(accountId);
-
-        if (Strings.isNotEmpty(accounts.getAccountType()) &&
-            Strings.isNotBlank(accounts.getAccountType()))
-            accountFromDB.setAccountType(accounts.getAccountType());
-        if(Strings.isNotEmpty(accounts.getBranchAddress()) &&
-                Strings.isNotBlank(accounts.getBranchAddress()))
-            accountFromDB.setBranchAddress(accounts.getBranchAddress());
-        if (accounts.getCustomerId() != null)
-            accountFromDB.setCustomerId(accounts.getCustomerId());
-
-        return accountsRepository.save(accountFromDB);
-    }
-
-    @Override
-    public Accounts deleteAccount(long id) {
-        Accounts accounts = getAccountById(id);
-        accountsRepository.deleteById(id);
-        return accounts;
-    }
-
-    @Override
-    public Accounts patchAccountSingleParameter(long id, Map<String, Object> accountParameterMay) {
-        Accounts accountsFromDB = getAccountById(id);
-
-        var parameterValue =
-                accountParameterMay.values().stream()
-                        .findFirst()
-                        .orElseThrow(RuntimeException::new);
-
-        var parameterKey = accountParameterMay.keySet().toString();
-
-        switch (parameterKey) {
-            case "accountType" -> accountsFromDB.setAccountType((String) parameterValue);
-            case "customerId" -> accountsFromDB.setCustomerId((Long) parameterValue);
-            case "branchAddress" -> accountsFromDB.setBranchAddress((String) parameterValue);
+        for (AccountsEntity account : accounts) {
+            responses.add(
+                    AccountsResponse
+                            .builder()
+                            .accountNumber(account.getAccountNumber())
+                            .accountType(account.getAccountType())
+                            .createdAt(account.getCreatedAt())
+                            .build()
+            );
         }
 
-        return accountsRepository.save(accountsFromDB);
+        return responses;
+    }
+
+    @Override
+    public AccountsResponse getAccountById(long id) {
+        var entity =
+                accountsRepository
+                        .findById(id)
+                        .orElseThrow(RuntimeException::new);
+
+        return AccountsResponse
+                .builder()
+                .accountNumber(entity.getAccountNumber())
+                .accountType(entity.getAccountType())
+                .createdAt(entity.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    public List<AccountsResponse> getAccountByCustomerId(long customerId,
+                                                         String accountType) {
+        log.info("ActionLog.getAccountByCustomerId.start");
+        var accounts = accountsRepository
+                .findByCustomerIdAndAccountType(customerId, accountType);
+        List<AccountsResponse> responses = new ArrayList<>();
+
+        for (AccountsEntity account : accounts) {
+            responses.add(
+                    AccountsResponse
+                            .builder()
+                            .accountNumber(account.getAccountNumber())
+                            .accountType(account.getAccountType())
+                            .createdAt(account.getCreatedAt())
+                            .build()
+            );
+        }
+        log.info("ActionLog.getAccountByCustomerId.success");
+        return responses;
+    }
+
+    //////////////Management////////////////////
+    @Override
+    public void save(AccountsRequest request) {
+        log.info("ActionLog.save.start");
+
+        if (request != null) {
+            var accountsEntity = AccountsEntity
+                    .builder()
+                    .accountType(request.getAccountType())
+                    .branchAddress(request.getBranchAddress())
+                    .customerId(request.getCustomerId())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+
+            accountsRepository.save(accountsEntity);
+            log.info("ActionLog.update.success request: {}", request);
+        } else {
+            log.error("ActionLog.save.error accountId: {}", request);
+            throw new RuntimeException();
+        }
+    }
+
+    @Override
+    public void update(long accountId, AccountsRequest request) {
+        log.info("ActionLog.update.start");
+        var accountFromDB =
+                accountsRepository.findById(accountId);
+
+        if (accountFromDB.isPresent()) {
+            if (Strings.isNotEmpty(request.getAccountType()) &&
+                    Strings.isNotBlank(request.getAccountType()))
+                accountFromDB.get().setAccountType(request.getAccountType());
+
+            if (Strings.isNotEmpty(request.getBranchAddress()) &&
+                    Strings.isNotBlank(request.getBranchAddress()))
+                accountFromDB.get().setBranchAddress(request.getBranchAddress());
+
+            if (request.getCustomerId() != null)
+                accountFromDB.get().setCustomerId(request.getCustomerId());
+
+            accountsRepository.save(accountFromDB.get());
+            log.info("ActionLog.update.success accountFromDB: {}", accountFromDB);
+        } else {
+            log.error("ActionLog.update.error accountId: {}", accountId);
+            throw new RuntimeException("Account with accountId: " + accountId + " not found");
+        }
+    }
+
+    @Override
+    public void updateBranchAddress(long accountId, String accountType) {
+        log.info("ActionLog.updateBranchAddress.start");
+        var accountFromDB = accountsRepository.findById(accountId);
+
+        if (accountFromDB.isPresent()) {
+            accountFromDB.get().setAccountType(accountType);
+
+            accountsRepository.save(accountFromDB.get());
+            log.info("ActionLog.updateBranchAddress.success accountId: {}", accountFromDB.get());
+        } else {
+            log.error("ActionLog.updateBranchAddress.error accountId: {}", accountFromDB.get());
+            throw new RuntimeException(String.format("Account with %s not found", accountId));
+        }
+    }
+
+    @Override
+    public void deleteAccount(long id) {
+        log.info("ActionLog.deleteAccount.start");
+        var accountById = accountsRepository.findById(id);
+        if (accountById.isPresent()) {
+            accountsRepository.deleteById(id);
+            log.info("ActionLog.deleteAccount.success accountId: {}", accountById.get());
+        } else {
+            log.error("ActionLog.deleteAccount.error accountId: {}", accountById.get());
+            throw new RuntimeException("Account with accountId: " + accountById + " not found");
+        }
     }
 }
